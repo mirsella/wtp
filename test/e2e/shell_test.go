@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -115,6 +116,24 @@ func TestShellCompletionCommands(t *testing.T) {
 			strings.Contains(output, "complete") ||
 				strings.Contains(output, "fish"),
 			"Should output fish completion script")
+	})
+
+	// hook, shell-init and completion all serve the same unified script.
+	t.Run("Nushell", func(t *testing.T) {
+		repo := env.CreateTestRepo("shell-nushell")
+
+		for _, args := range [][]string{
+			{"completion", "nushell"},
+			{"hook", "nushell"},
+			{"shell-init", "nushell"},
+		} {
+			output, err := repo.RunWTP(args...)
+			framework.AssertNoError(t, err)
+			framework.AssertOutputContains(t, output, "nu-complete wtp")
+			framework.AssertTrue(t,
+				strings.Count(output, "def --env --wrapped wtp") == 1,
+				fmt.Sprintf("%v should print the unified nushell script exactly once", args))
+		}
 	})
 
 	t.Run("InvalidShell", func(t *testing.T) {

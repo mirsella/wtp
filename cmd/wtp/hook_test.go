@@ -260,3 +260,30 @@ func TestHookScripts_AutoCdAfterAdd(t *testing.T) {
 		})
 	}
 }
+
+func TestHookCommand_NushellGeneratesValidHook(t *testing.T) {
+	subCmd := findSubcommand(NewHookCommand(), "nushell")
+	require.NotNil(t, subCmd, "Hook command must support nushell")
+	require.NotNil(t, subCmd.Action)
+
+	app := &cli.Command{Commands: []*cli.Command{NewHookCommand()}}
+	var buf bytes.Buffer
+	app.Writer = &buf
+
+	require.NoError(t, app.Run(context.Background(), []string{"wtp", "hook", "nushell"}))
+	output := buf.String()
+	require.NotEmpty(t, output, "Hook script should not be empty")
+
+	for _, expected := range []string{
+		"nu-complete wtp",
+		"def --env --wrapped wtp",
+		"^wtp cd ...$rest | complete",
+		"cd ($res.stdout | str trim)",
+		"($args.0 == \"add\") and (is-terminal)",
+		"($args | append \"--quiet\")",
+		"(^wtp ...$quiet_args | complete)",
+	} {
+		assert.Contains(t, output, expected)
+	}
+	assert.NotContains(t, output, "WTP_SHELL_INTEGRATION")
+}

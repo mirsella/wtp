@@ -14,6 +14,7 @@ const (
 	shellFish      = "fish"
 	shellBash      = "bash"
 	shellZsh       = "zsh"
+	shellNushell   = "nushell"
 )
 
 func configureCompletionCommand(cmd *cli.Command) {
@@ -30,6 +31,14 @@ func configureCompletionCommand(cmd *cli.Command) {
 			} else {
 				writer = os.Stdout
 			}
+		}
+
+		// Nushell is not supported by urfave/cli's built-in completion command,
+		// so serve our custom script directly instead of invoking the original action
+		// (which would fail with an "unknown shell" error).
+		if args := c.Args(); args != nil && args.Len() > 0 && args.First() == shellNushell {
+			_, err := writer.Write([]byte(buildNushellCompletionScript()))
+			return err
 		}
 
 		var buf bytes.Buffer
@@ -61,6 +70,8 @@ func patchCompletionScript(shell, script string) string {
 		return patchBashCompletionScript(script)
 	case shellZsh:
 		return patchZshCompletionScript(script)
+	case shellNushell:
+		return buildNushellCompletionScript()
 	default:
 		return script
 	}
@@ -249,4 +260,89 @@ func inShellCompletionContext() bool {
 		return true
 	}
 	return false
+}
+
+// buildNushellCompletionScript returns the nushell integration script.
+//
+// Nushell is not supported by urfave/cli's built-in completion generator, so
+// this custom script provides both dynamic completion (via the
+// --generate-shell-completion protocol) and the cd/add navigation wrapper.
+//
+// In nushell, completion is attached to the wrapper definition itself
+// (...args: string@"nu-complete wtp"), so the hook and completion cannot be
+// separated like in bash/zsh/fish: printNushellHook and shellInitNushell reuse
+// this same unified script.
+func buildNushellCompletionScript() string {
+	return `# wtp nushell integration: dynamic completion + cd/add navigation
+# Source it once from your env.nu or config.nu:
+#   wtp shell-init nushell | save -f ~/.cache/wtp-init.nu
+#   source ~/.cache/wtp-init.nu
+
+def "nu-complete wtp" [context: string] {
+  let spans = ($context | split row ' ' | skip 1)
+  let args = if ("--generate-shell-completion" in $spans) {
+    $spans
+  } else {
+    ($spans | append "--generate-shell-completion")
+  }
+  let raw: list<string> = try {
+    with-env {WTP_SHELL_COMPLETION: 1, SHELL: "fish"} {
+      ^wtp ...$args | lines
+    }
+  } catch {
+    []
+  }
+  $raw | where { ($in | str trim) != "" } | each { |line|
+    let parts = ($line | split row ":")
+    if (($parts | length) > 1) {
+      let value = ($parts | first)
+      let desc = ($parts | skip 1 | str join ":")
+      if (($value | str trim) == "") or (($desc | str trim) == "") {
+        $line
+      } else {
+        {value: $value, description: $desc}
+      }
+    } else {
+      $line
+    }
+  }
+}
+
+# Every branch ends in the external call (never return after one): in
+# nushell an external's stdout only flows to the caller's pipeline when it is
+# the branch value, so calling wtp and then returning would leak its output
+# to the terminal instead of the pipeline.
+def --env --wrapped wtp [...args: string@"nu-complete wtp"] {
+  if ($args | is-empty) or ("--generate-shell-completion" in $args) or ("--help" in $args) or ("-h" in $args) {
+    ^wtp ...$args
+  } else if ($args.0 == "cd") {
+    let rest = ($args | skip 1)
+    let res = (^wtp cd ...$rest | complete)
+    if $res.exit_code == 0 and (($res.stdout | str trim) != "") {
+      cd ($res.stdout | str trim)
+    } else {
+      # Re-run uncaptured so the error surfaces and the failure status
+      # propagates, like the bash/fish hooks.
+      ^wtp cd ...$rest
+    }
+  } else if ($args.0 == "add") and (is-terminal) {
+    let quiet_args = if ("--quiet" in $args) { $args } else { ($args | append "--quiet") }
+    let res = (^wtp ...$quiet_args | complete)
+    if $res.exit_code == 0 {
+      if (($res.stderr | str trim) != "") {
+        print -e ($res.stderr | str trim)
+      }
+      if (($res.stdout | str trim) != "") {
+        cd ($res.stdout | str trim)
+      }
+    } else {
+      # Re-run uncaptured so the error surfaces and the failure status
+      # propagates, like the bash/fish hooks.
+      ^wtp ...$quiet_args
+    }
+  } else {
+    ^wtp ...$args
+  }
+}
+`
 }

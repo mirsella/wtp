@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
 )
 
@@ -76,4 +77,23 @@ func TestShellInitCommand_OutputsValidScripts(t *testing.T) {
 			assert.Contains(t, buf.String(), "completion-"+tt.shell)
 		})
 	}
+}
+
+func TestShellInitCommand_NushellGeneratesUnifiedScript(t *testing.T) {
+	subcommands := make(map[string]*cli.Command)
+	for _, sub := range NewShellInitCommand().Commands {
+		subcommands[sub.Name] = sub
+	}
+	assert.Contains(t, subcommands, "nushell", "Shell-init command must support nushell")
+	assert.NotNil(t, subcommands["nushell"].Action)
+
+	// Nushell completion and hook are a unified script that does not
+	// go through runCompletionCommand.
+	app := &cli.Command{Commands: []*cli.Command{NewShellInitCommand()}}
+	var buf bytes.Buffer
+	app.Writer = &buf
+
+	require.NoError(t, app.Run(context.Background(), []string{"wtp", "shell-init", "nushell"}))
+	assert.Contains(t, buf.String(), "nu-complete wtp")
+	assert.Contains(t, buf.String(), "def --env --wrapped wtp")
 }

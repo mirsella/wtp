@@ -32,7 +32,8 @@ func NewCdCommand() *cli.Command {
 			"To enable the hook for easier navigation:\n" +
 			"  Bash: eval \"$(wtp hook bash)\"\n" +
 			"  Zsh:  eval \"$(wtp hook zsh)\"\n" +
-			"  Fish: wtp hook fish | source",
+			"  Fish: wtp hook fish | source\n" +
+			"  Nushell: wtp hook nushell | save -f ~/.cache/wtp-init.nu; source ~/.cache/wtp-init.nu",
 		ArgsUsage:     "[worktree-name]",
 		Action:        cdToWorktree,
 		ShellComplete: completeWorktreesForCd,

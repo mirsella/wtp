@@ -11,9 +11,10 @@ import (
 )
 
 var allowedShells = map[string]struct{}{
-	"bash": {},
-	"zsh":  {},
-	"fish": {},
+	"bash":    {},
+	"zsh":     {},
+	"fish":    {},
+	"nushell": {},
 }
 
 var runCompletionCommand = func(shell string) ([]byte, error) {
@@ -43,7 +44,8 @@ func NewShellInitCommand() *cli.Command {
 			"To enable full shell integration, add the following to your shell config:\n" +
 			"  Bash (~/.bashrc):         eval \"$(wtp shell-init bash)\"\n" +
 			"  Zsh (~/.zshrc):           eval \"$(wtp shell-init zsh)\"\n" +
-			"  Fish (~/.config/fish/config.fish): wtp shell-init fish | source",
+			"  Fish (~/.config/fish/config.fish): wtp shell-init fish | source\n" +
+			"  Nushell (env.nu/config.nu): wtp shell-init nushell | save -f ~/.cache/wtp-init.nu; source ~/.cache/wtp-init.nu",
 		Commands: []*cli.Command{
 			{
 				Name:        "bash",
@@ -62,6 +64,12 @@ func NewShellInitCommand() *cli.Command {
 				Usage:       "Generate fish initialization script",
 				Description: "Generate fish initialization script with completion and navigation hooks",
 				Action:      shellInitFish,
+			},
+			{
+				Name:        "nushell",
+				Usage:       "Generate nushell initialization script",
+				Description: "Generate nushell initialization script with completion and navigation hooks",
+				Action:      shellInitNushell,
 			},
 		},
 	}
@@ -122,6 +130,18 @@ func shellInitFish(_ context.Context, cmd *cli.Command) error {
 	}
 
 	return printFishHook(w)
+}
+
+func shellInitNushell(_ context.Context, cmd *cli.Command) error {
+	w := cmd.Root().Writer
+	if w == nil {
+		w = os.Stdout
+	}
+
+	// Nushell completion and hook are a single unified script (completion is
+	// attached to the wrapper definition), so output it once instead of
+	// concatenating separate completion and hook sections.
+	return printNushellHook(w)
 }
 
 // outputCompletion executes wtp completion command and writes output to w

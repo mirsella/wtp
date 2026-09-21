@@ -19,7 +19,8 @@ func NewHookCommand() *cli.Command {
 			"To enable the hook, add the following to your shell config:\n" +
 			"  Bash (~/.bashrc):         eval \"$(wtp hook bash)\"\n" +
 			"  Zsh (~/.zshrc):           eval \"$(wtp hook zsh)\"\n" +
-			"  Fish (~/.config/fish/config.fish): wtp hook fish | source",
+			"  Fish (~/.config/fish/config.fish): wtp hook fish | source\n" +
+			"  Nushell (env.nu/config.nu): wtp hook nushell | save -f ~/.cache/wtp-init.nu; source ~/.cache/wtp-init.nu",
 		Commands: []*cli.Command{
 			{
 				Name:        "bash",
@@ -38,6 +39,12 @@ func NewHookCommand() *cli.Command {
 				Usage:       "Generate fish hook script",
 				Description: "Generate fish hook script for cd functionality",
 				Action:      hookFish,
+			},
+			{
+				Name:        "nushell",
+				Usage:       "Generate nushell hook script",
+				Description: "Generate nushell hook script for cd functionality",
+				Action:      hookNushell,
 			},
 		},
 	}
@@ -65,6 +72,14 @@ func hookFish(_ context.Context, cmd *cli.Command) error {
 		w = os.Stdout
 	}
 	return printFishHook(w)
+}
+
+func hookNushell(_ context.Context, cmd *cli.Command) error {
+	w := cmd.Root().Writer
+	if w == nil {
+		w = os.Stdout
+	}
+	return printNushellHook(w)
 }
 
 func printBashHook(w io.Writer) error {
@@ -222,6 +237,17 @@ function wtp
         command wtp $argv
     end
 end`)
+
+	return err
+}
+
+// printNushellHook writes the nushell integration script.
+//
+// Nushell attaches completion to the wrapper definition itself, so the hook
+// must include the dynamic completer: this outputs the same unified script as
+// buildNushellCompletionScript.
+func printNushellHook(w io.Writer) error {
+	_, err := fmt.Fprint(w, buildNushellCompletionScript())
 
 	return err
 }

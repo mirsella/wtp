@@ -103,6 +103,25 @@ func TestPatchCompletionScriptFishMatchesGolden(t *testing.T) {
 	assertCompletionGolden(t, "fish_expected.fish", got)
 }
 
+func TestPatchCompletionScriptNushellMatchesGolden(t *testing.T) {
+	got := patchCompletionScript("nushell", "ignored")
+	assertCompletionGolden(t, "nushell_expected.nu", got)
+}
+
+func TestCompletionNushellBypassesBuiltinGenerator(t *testing.T) {
+	// urfave/cli has no nushell generator: `wtp completion nushell` must serve
+	// the custom script instead of failing with an unknown-shell error.
+	script := generateCompletionScript(t, "nushell")
+	for _, expected := range []string{"nu-complete wtp", "def --env --wrapped wtp"} {
+		if !strings.Contains(script, expected) {
+			t.Fatalf("expected nushell completion to contain %q, got:\n%s", expected, script)
+		}
+	}
+	if want := buildNushellCompletionScript(); script != want {
+		t.Fatalf("expected completion command output to match builder output")
+	}
+}
+
 func TestPatchCompletionScriptPassthroughForOtherShells(t *testing.T) {
 	original := "original-script"
 
@@ -119,6 +138,7 @@ func TestCompletionCommandMatchesGolden(t *testing.T) {
 		{shell: "bash", file: "bash_expected.sh"},
 		{shell: "fish", file: "fish_expected.fish"},
 		{shell: "zsh", file: "zsh_expected.zsh"},
+		{shell: "nushell", file: "nushell_expected.nu"},
 	}
 
 	for _, tc := range cases {
